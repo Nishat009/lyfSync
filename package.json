@@ -1,0 +1,27 @@
+{
+  "name": "lifesync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LifeSync: personal and professional life management",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"npm run dev -w @lifesync/server\" \"npm run dev -w @lifesync/web\"",
+    "db:local": "npm run db:local -w @lifesync/server",
+    "db:migrate": "npm run db:migrate -w @lifesync/server",
+    "build": "npm run build -w @lifesync/server && npm run build -w @lifesync/web",
+    "start": "concurrently -k -n api,web -c blue,green \"npm run start -w @lifesync/server\" \"npm run start -w @lifesync/web\"",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test -w @lifesync/server"
+  },
+  "devDependencies": {
+    "concurrently": "10.0.6",
+    "typescript": "5.9.3"
+  }
+}

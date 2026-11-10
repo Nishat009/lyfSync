@@ -1,0 +1,14 @@
+node_modules/
+.next/
+dist/
+coverage/
+*.log
+.env
+.env.local
+.env.*.local
+!.env.example
+# local embedded Postgres data and uploaded files
+.data/
+apps/server/storage/
+*.tsbuildinfo
+next-env.d.ts
