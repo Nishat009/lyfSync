@@ -79,7 +79,7 @@ function formatClock(time: string): string {
 }
 
 /** Creates the per-channel delivery rows for a notification. In-app is delivered the moment the row exists. */
-async function createDeliveries(db: Db, notificationId: string, userId: string, now: Date): Promise<void> {
+export async function createDeliveries(db: Db, notificationId: string, userId: string, now: Date): Promise<void> {
   const q = await db.query(
     `select p.in_app_enabled, p.push_enabled, p.email_enabled, p.quiet_hours_enabled, p.quiet_hours_start::text,
             p.quiet_hours_end::text, pr.timezone,
@@ -183,7 +183,8 @@ async function sendPush(deps: SchedulerDeps, db: Db, d: Record<string, any>): Pr
   for (const s of subs.rows) {
     const res = await deps.push.send(
       { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
-      { title: d.title, body: d.body ?? "", url: d.link ?? "/my-day", notificationId: d.notification_id, tag: `task-${d.task_id ?? d.notification_id}` },
+      { title: d.title, body: d.body ?? "", url: d.link ?? "/my-day", notificationId: d.notification_id, // Only reminders get the Mark done / Snooze buttons (the service worker keys on the "task-" prefix).
+        tag: d.type === "reminder" ? `task-${d.task_id ?? d.notification_id}` : `note-${d.notification_id}` },
     );
     if (res.ok) {
       ok = true;
@@ -207,7 +208,7 @@ async function sendEmail(deps: SchedulerDeps, d: Record<string, any>): Promise<O
     const sent = await deps.mailer.send({
       to: d.email,
       subject: d.title,
-      text: `${d.body ?? ""}\n\nOpen LifeSync: ${deps.config.APP_URL}${d.link ?? "/my-day"}\n\nYou can change reminder emails in Settings > Notifications.`,
+      text: `${d.body ?? ""}\n\nOpen LifeSync: ${deps.config.APP_URL}${d.link ?? "/my-day"}\n\nYou can change which emails you get in Settings > Notifications.`,
     });
     return sent ? { status: "sent" } : { status: "skipped", reason: "SMTP is not configured" };
   } catch (e) {
@@ -235,7 +236,7 @@ async function runDeliveries(deps: SchedulerDeps, now: Date): Promise<number> {
     try {
       await withSystem(async (db) => {
         const q = await db.query(
-          `select d.id, d.channel, d.user_id, d.notification_id, n.title, n.body, n.link, n.task_id, u.email, u.email_verified_at
+          `select d.id, d.channel, d.user_id, d.notification_id, n.type, n.title, n.body, n.link, n.task_id, u.email, u.email_verified_at
            from notification_deliveries d join notifications n on n.id = d.notification_id join users u on u.id = d.user_id
            where d.id = $1`,
           [c.id],

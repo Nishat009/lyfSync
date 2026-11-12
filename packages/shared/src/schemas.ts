@@ -233,7 +233,7 @@ export function checkRecurrenceHasDate(v: { dueDate?: string | null; recurrence?
 export const createTaskSchema = taskFieldsSchema
   .partial()
   .required({ title: true })
-  .extend({ workspaceId: uuidSchema })
+  .extend({ workspaceId: uuidSchema, assigneeIds: z.array(uuidSchema).max(25).optional() })
   .superRefine((v, ctx) => {
     checkTaskDates(v, ctx);
     checkRecurrenceHasDate(v, ctx);
@@ -249,8 +249,19 @@ export const updateSubtaskSchema = z.object({
   isDone: z.boolean().optional(),
 });
 
+/** Who a task is assigned to: one person, "me", or nobody. */
+export const assigneeFilterSchema = z.union([uuidSchema, z.literal("me"), z.literal("none")]);
+
+export const setAssigneesSchema = z.object({ userIds: z.array(uuidSchema).max(25, { error: "Assign a task to at most 25 people" }) });
+export type SetAssigneesInput = z.infer<typeof setAssigneesSchema>;
+
+export const commentSchema = z.object({
+  body: z.string().trim().min(1, { error: "Write a comment first" }).max(5000, { error: "Keep comments under 5000 characters" }),
+});
+
 export const taskListQuerySchema = z.object({
   workspaceId: uuidSchema.optional(),
+  assignee: assigneeFilterSchema.optional(),
   status: z.union([z.enum(TASK_STATUSES), z.literal("open")]).optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
   projectId: uuidSchema.optional(),

@@ -1,4 +1,8 @@
-import type { TaskDetail, TaskListItem, TaskSummary } from "@lifesync/shared";
+import type { Assignee, TaskDetail, TaskListItem, TaskPermissions, TaskSummary } from "@lifesync/shared";
+
+export function avatarUrl(userId: string, path: string | null): string | null {
+  return path ? `/api/avatars/${userId}?v=${encodeURIComponent(path)}` : null;
+}
 
 /** Columns every task list needs, with dates as plain strings (the pg driver would make Dates). */
 export const TASK_SUMMARY_SQL = `
@@ -37,7 +41,9 @@ export const PRIORITY_ORDER_SQL = `case t.priority when 'urgent' then 0 when 'hi
 export const TASK_LIST_SQL = `${TASK_SUMMARY_SQL},
   t.project_id, p.name as project_name, t.tags, (t.archived_at is not null) as archived, (t.recurring_rule_id is not null) as recurring,
   (select count(*)::int from subtasks s where s.task_id = t.id) as subtasks_total,
-  (select count(*)::int from subtasks s where s.task_id = t.id and s.is_done) as subtasks_done`;
+  (select count(*)::int from subtasks s where s.task_id = t.id and s.is_done) as subtasks_done,
+  (select coalesce(json_agg(json_build_object('userId', a.user_id, 'fullName', pr.full_name, 'avatar', pr.avatar_path) order by pr.full_name), '[]'::json)
+     from task_assignees a join profiles pr on pr.id = a.user_id where a.task_id = t.id) as assignees`;
 
 export const TASK_LIST_FROM = `${TASK_SUMMARY_FROM}
   left join projects p on p.workspace_id = t.workspace_id and p.id = t.project_id`;
@@ -45,6 +51,9 @@ export const TASK_LIST_FROM = `${TASK_SUMMARY_FROM}
 export function mapListItem(r: Record<string, any>): TaskListItem {
   return {
     ...mapTask(r),
+    assignees: ((r.assignees ?? []) as { userId: string; fullName: string; avatar: string | null }[]).map(
+      (a): Assignee => ({ userId: a.userId, fullName: a.fullName, avatarUrl: avatarUrl(a.userId, a.avatar) }),
+    ),
     projectId: r.project_id,
     projectName: r.project_name,
     tags: r.tags,
@@ -58,13 +67,13 @@ export function mapListItem(r: Record<string, any>): TaskListItem {
 export const TASK_DETAIL_SQL = `${TASK_LIST_SQL},
   t.description, t.notes, t.category_id, t.start_date::text as start_date,
   to_char(t.start_time, 'HH24:MI') as start_time, t.actual_minutes, t.created_at,
-  (select full_name from profiles where id = t.created_by) as created_by_name`;
+  (select full_name from profiles where id = t.created_by) as created_by_name, t.created_by as created_by_id`;
 
 export function mapDetail(
   r: Record<string, any>,
   subtasks: TaskDetail["subtasks"],
-  assignees: TaskDetail["assignees"],
   recurrence: TaskDetail["recurrence"],
+  permissions: TaskPermissions,
 ): TaskDetail {
   return {
     ...mapListItem(r),
@@ -76,7 +85,8 @@ export function mapDetail(
     actualMinutes: r.actual_minutes,
     createdAt: new Date(r.created_at).toISOString(),
     createdByName: r.created_by_name,
-    assignees,
+    createdById: r.created_by_id,
+    permissions,
     subtasks,
     recurrence,
   };

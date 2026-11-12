@@ -95,13 +95,15 @@ The whole schema ships up front. So far the UI and API use identity, workspaces,
 | 1 | Setup, authentication, schema, personal and organization workspaces, invitations, dashboard / My Day, quick add, notifications inbox, settings | **Built** |
 | 2 | Full task CRUD (edit, duplicate, archive, reschedule), projects, categories, checklists, tags, list + Kanban views, filters and sorting | **Built** |
 | 3 | Calendar (day/week/month/agenda, drag to reschedule, conflicts), recurring tasks, reminder scheduler, in-app / email / web push delivery, snooze, retries, missed alerts | **Built** (push not verified on a real device, see section 6) |
-| 4 | Task assignment, comments, activity timeline, manager views, project progress | Planned |
+| 4 | Task assignment, comments, activity timeline, manager views, project progress, role-based task permissions | **Built** |
 | 5 | Focus mode, habits, analytics, notes, polish, accessibility and security review | Planned |
 
 ## 6. Known gaps
 
 - **Web push has not been verified on a real device.** The server side (subscriptions, VAPID signing, retries, removal of dead subscriptions, notification actions) is covered by automated tests with a fake push service, and the settings screen and service worker work up to the browser prompt. The automated browser used here runs in incognito mode, where Chrome and Edge disable the Push API, so a real push could not be sent. Please try **Settings > Notifications on this device > Turn on > Send a test** once in a normal browser window.
-- Task attachments are not built (schema exists); assigning tasks to other members and comments arrive in Phase 4.
+- Task attachments are not built (schema exists, no upload or storage code yet).
+- Comments are plain text: no @mentions, reactions or file attachments. Activity and comments cannot be searched.
+- Organization roles are fixed (admin, manager, member); there are no custom roles or per-project membership.
 - Kanban moves change a task's status only; the order of cards within a column is not stored.
 - Repeating tasks create their next occurrence when the current one is completed or cancelled; future occurrences are not pre-created, so they do not appear on the calendar ahead of time.
 - Calendar blocks use the due time as the start (or the start time when one is set on the same day) and the estimate as the length (30 minutes by default).
@@ -116,6 +118,26 @@ The whole schema ships up front. So far the UI and API use identity, workspaces,
 5. Quiet hours hold push and email until they end; the in-app notification still appears. Reminders more than 12 hours late (for example after long downtime) are dropped rather than replayed.
 6. "Missed" alerts: once per task and person, for an open timed task that is 15+ minutes overdue (can be switched off in Settings).
 7. Notifications can be snoozed or used to complete the task, from the app or from the browser notification itself.
+
+## 6b. Collaboration in organizations
+
+**Who can do what to a task** (the API computes this and sends it as `permissions` on every task, so the screen never guesses):
+
+| | Admin / manager | Member who **created** the task | Member who was only **assigned** it | Other members |
+| --- | --- | --- | --- | --- |
+| See the task | yes, all tasks | yes | yes | no (404) |
+| Change any field, archive, delete | yes | yes | no | no |
+| Status, notes, time spent, checklist | yes | yes | **yes** | no |
+| Choose assignees | yes | no | no | no |
+| Comment | yes | yes | yes | no |
+
+- **Rows** are decided by RLS (`app.can_see_task`); **columns** are decided by the API, because RLS cannot express them. `PATCH /tasks/:id` compares the new values with the stored ones, so a form that resends every field does not trip the rule unless something restricted actually changed. Archiving and deleting are creator, manager and admin only (the delete policy also enforces it in the database).
+- **Assigning**: `PUT /tasks/:id/assignees` or `assigneeIds` when creating. Anybody not in the workspace is refused by a database trigger. A task with no `assigneeIds` is assigned to its creator, so it shows on their My Day; a manager may leave it unassigned. Taking someone off a task also cancels their pending reminders for it (done with `withSystem`, since RLS rightly stops a manager editing somebody else's reminders).
+- **Comments**: authors edit their own; authors and admins delete (managers moderate nothing they did not write). Comments are removed with their task.
+- **Notifications** for assignments and comments go through the same pipeline as reminders (`services/collab.ts` → `createDeliveries`): in-app first, then push and email per the person's preferences, quiet hours and retries. They are written after the request's own transaction, so a notification failure can never undo the action. The author of a comment is never notified of it. Only reminders get the Mark done / Snooze buttons on a push.
+- **Activity timeline**: every task change appends to `activity_logs` (created, updated with the names of the fields that really changed, status changed, assigned, unassigned, commented, archived, deleted). Anyone who can see a task reads that task's history (migration 0008); the workspace-wide feed (`GET /workspaces/:id/activity`) is for admins and managers. Deleted tasks keep their title in the entry.
+- **Team overview** (`GET /workspaces/:id/team`, admins and managers of an organization): per person open, in progress, due today, overdue and done in the last 7 days, plus unassigned open tasks. A task shared by two people counts once in the totals and once for each person in the table. Project progress is the existing `taskDone / taskTotal` per active project.
+- Tests: `apps/server/tests/collab.test.ts` (assignment, the permission table above, comments, notifications incl. push tags, timeline, team counts).
 
 ## 7. Running locally
 

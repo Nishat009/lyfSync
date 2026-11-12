@@ -174,7 +174,14 @@ export interface NotificationPage {
   nextCursor: string | null;
 }
 
+export interface Assignee {
+  userId: string;
+  fullName: string;
+  avatarUrl: string | null;
+}
+
 export interface TaskListItem extends TaskSummary {
+  assignees: Assignee[];
   projectId: string | null;
   projectName: string | null;
   tags: string[];
@@ -199,7 +206,9 @@ export interface TaskDetail extends TaskListItem {
   actualMinutes: number;
   createdAt: string;
   createdByName: string | null;
-  assignees: { userId: string; fullName: string }[];
+  createdById: string | null;
+  /** What the signed-in person may do with this task (decided by the server). */
+  permissions: TaskPermissions;
   subtasks: Subtask[];
   recurrence: import("./recurrence").Recurrence | null;
 }
@@ -252,4 +261,53 @@ export interface PushStatus {
   configured: boolean;
   publicKey: string | null;
   subscriptions: number;
+}
+
+export interface TaskPermissions {
+  /** Change any field, archive or duplicate. Creators, managers and admins. */
+  edit: boolean;
+  /** Choose who the task is assigned to. Managers and admins. */
+  assign: boolean;
+  delete: boolean;
+}
+
+export interface TaskComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  editedAt: string | null;
+  author: { userId: string; fullName: string; avatarUrl: string | null } | null;
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
+export interface ActivityEntry {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  /** Title of the task the entry is about, when it is a task event. */
+  taskTitle: string | null;
+  actor: { userId: string; fullName: string } | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface TeamMemberLoad {
+  userId: string;
+  fullName: string;
+  avatarUrl: string | null;
+  role: WorkspaceRole;
+  open: number;
+  inProgress: number;
+  dueToday: number;
+  overdue: number;
+  completedLast7Days: number;
+}
+
+export interface TeamOverview {
+  today: string;
+  members: TeamMemberLoad[];
+  unassignedOpen: number;
+  totals: { open: number; overdue: number; completedLast7Days: number };
 }

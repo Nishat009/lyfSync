@@ -1,10 +1,10 @@
 "use client";
 
-import { Bell, CalendarDays, CheckSquare, FolderKanban, LayoutDashboard, Mail, Settings, Sun, Users } from "lucide-react";
+import { Bell, CalendarDays, CheckSquare, FolderKanban, LayoutDashboard, Mail, Settings, Sun, Users, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { Logo } from "./auth-shell";
-import { useSession } from "./session";
+import { canManage, useSession } from "./session";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { cn } from "@/lib/utils";
 
@@ -80,6 +80,9 @@ export function Sidebar({ collapsed, onNavigate }: { collapsed?: boolean; onNavi
             <NavLink href={`/w/${current.id}/tasks`} icon={CheckSquare} label="Tasks" {...nav} />
             <NavLink href={`/w/${current.id}/calendar`} icon={CalendarDays} label="Workspace calendar" {...nav} />
             <NavLink href={`/w/${current.id}/projects`} icon={FolderKanban} label="Projects" {...nav} />
+            {current.type === "organization" && canManage(current.role) && (
+              <NavLink href={`/w/${current.id}/team`} icon={UsersRound} label="Team" {...nav} />
+            )}
             {current.type === "organization" && (
               <NavLink href={`/w/${current.id}/members`} icon={Users} label="Members" {...nav} />
             )}

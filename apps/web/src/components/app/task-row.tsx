@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { invalidate } from "@/lib/use-query";
 import { cn, formatDay, formatTime } from "@/lib/utils";
+import { AssigneeAvatars } from "./assignees";
 import { useTaskDialogs } from "./task-dialogs";
 
 const priorityTone: Record<TaskPriority, "danger" | "warning" | "neutral"> = {
@@ -100,6 +101,7 @@ export function TaskRow({
       {(task.priority === "urgent" || task.priority === "high") && (
         <Badge tone={priorityTone[task.priority]}>{PRIORITY_LABELS[task.priority]}</Badge>
       )}
+      {work && extra && <AssigneeAvatars assignees={extra.assignees} />}
       {actions}
     </li>
   );

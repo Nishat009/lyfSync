@@ -32,7 +32,8 @@ import { api, applyFormError } from "@/lib/api";
 import { PRESET_LABELS, buildRecurrence, fieldsOf, type Preset } from "@/lib/recurrence-ui";
 import { invalidate, useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
-import { useSession } from "./session";
+import { AssigneePicker } from "./assignees";
+import { canManage, useSession } from "./session";
 
 /** Projects and categories of one workspace, for the pickers. */
 export function useWorkspaceMeta(workspaceId: string | null) {
@@ -193,8 +194,10 @@ function TaskFormInner({
   initialReminders: ReminderChoice;
   onDone: (saved?: { id: string }) => void;
 }) {
-  const { workspaces, profile } = useSession();
+  const { workspaces, profile, user } = useSession();
   const [formError, setFormError] = useState<string | null>(null);
+  // Who the task is assigned to. Only managers and admins of an organization choose; everybody else owns what they create.
+  const [assignees, setAssignees] = useState<string[]>(() => (task ? task.assignees.map((a) => a.userId) : [user.id]));
   const [reminders, setReminders] = useState<ReminderChoice>(initialReminders);
   const [defaults] = useState<Values>(() => {
     const rec = fieldsOf(task?.recurrence ?? null);
@@ -253,6 +256,8 @@ function TaskFormInner({
   const unit = useWatch({ control, name: "unit" });
   const endMode = useWatch({ control, name: "endMode" });
   const { projects, categories } = useWorkspaceMeta(workspaceId || null);
+  const chosen = workspaces.find((w) => w.id === workspaceId);
+  const canAssign = chosen?.type === "organization" && canManage(chosen.role);
 
   return (
     <form
@@ -281,10 +286,23 @@ function TaskFormInner({
         try {
           saved = task
             ? await api<TaskDetail>(`/api/tasks/${task.id}`, { method: "PATCH", body })
-            : await api<{ id: string }>("/api/tasks", { body: { ...body, workspaceId: v.workspaceId } });
+            : await api<{ id: string }>("/api/tasks", {
+                body: { ...body, workspaceId: v.workspaceId, ...(canAssign ? { assigneeIds: assignees } : {}) },
+              });
         } catch (e) {
           setFormError(applyFormError(e, setError));
           return;
+        }
+        // Assignment on an existing task is its own call; the task itself is already saved if it fails.
+        if (task && canAssign) {
+          const before = task.assignees.map((a) => a.userId).sort().join();
+          if (before !== [...assignees].sort().join()) {
+            try {
+              await api(`/api/tasks/${task.id}/assignees`, { method: "PUT", body: { userIds: assignees } });
+            } catch (e) {
+              toast.error(`Task saved, but the assignment was not: ${e instanceof Error ? e.message : "unknown error"}`);
+            }
+          }
         }
         // Reminders are saved separately; the task itself is already safe if this step fails.
         try {
@@ -326,6 +344,7 @@ function TaskFormInner({
                 onChange: () => {
                   setValue("projectId", "");
                   setValue("categoryId", "");
+                  setAssignees([user.id]);
                 },
               })}
             >
@@ -389,6 +408,14 @@ function TaskFormInner({
           {(p) => <Input placeholder="home, urgent" {...p} {...register("tags")} />}
         </Field>
       </div>
+
+      {canAssign && (
+        <div>
+          <p className="mb-1.5 text-sm font-medium">Assigned to</p>
+          <AssigneePicker workspaceId={workspaceId} value={assignees} onChange={setAssignees} />
+          {assignees.length === 0 && <p className="mt-1 text-xs text-muted">Nobody is assigned. It will show up under Unassigned for managers.</p>}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label="Start date" error={errors.startDate?.message}>

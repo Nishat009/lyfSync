@@ -7,13 +7,15 @@ import {
   TASK_SORTS,
   TASK_SORT_LABELS,
   TASK_STATUSES,
+  type Member,
   type TaskListItem,
   type TaskStatus,
 } from "@lifesync/shared";
 import { Archive, CheckSquare, Columns3, List, Plus } from "lucide-react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { useWorkspace } from "@/components/app/session";
+import { AssigneeAvatars } from "@/components/app/assignees";
+import { canManage, useWorkspace } from "@/components/app/session";
 import { useTaskDialogs } from "@/components/app/task-dialogs";
 import { useWorkspaceMeta } from "@/components/app/task-form";
 import { TaskRow, setTaskStatus } from "@/components/app/task-row";
@@ -60,6 +62,7 @@ function BoardCard({ task, onOpen }: { task: TaskListItem; onOpen: () => void })
           )}
           {task.categoryName && <Badge tone={work ? "work" : "personal"}>{task.categoryName}</Badge>}
         </div>
+        {work && <AssigneeAvatars assignees={task.assignees} />}
         <select
           aria-label={`Move ${task.title} to another column`}
           value={task.status}
@@ -138,6 +141,10 @@ function Tasks({ initialQ, initialProject }: { initialQ: string; initialProject:
   const [categoryId, setCategoryId] = useState("");
   const [sort, setSort] = useState("due");
   const [archived, setArchived] = useState(false);
+  const [assignee, setAssignee] = useState("");
+  const isOrg = workspace?.type === "organization";
+  const manager = !!workspace && canManage(workspace.role);
+  const people = useQuery<Member[]>(isOrg && manager ? `/api/workspaces/${id}/members` : null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 250);
@@ -151,6 +158,7 @@ function Tasks({ initialQ, initialProject }: { initialQ: string; initialProject:
   if (priority) query.set("priority", priority);
   if (projectId) query.set("projectId", projectId);
   if (categoryId) query.set("categoryId", categoryId);
+  if (assignee && manager) query.set("assignee", assignee);
   if (debounced.trim()) query.set("q", debounced.trim());
   const { data, error, loading, reload } = useQuery<TaskListItem[]>(`/api/tasks?${query}`);
 
@@ -233,6 +241,18 @@ function Tasks({ initialQ, initialProject }: { initialQ: string; initialProject:
             </option>
           ))}
         </Select>
+        {isOrg && manager && (
+          <Select className="w-44" aria-label="Filter by assignee" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+            <option value="">Anyone</option>
+            <option value="me">Assigned to me</option>
+            <option value="none">Unassigned</option>
+            {(people.data ?? []).map((m) => (
+              <option key={m.userId} value={m.userId}>
+                {m.fullName}
+              </option>
+            ))}
+          </Select>
+        )}
         <Select className="w-40" aria-label="Sort by" value={sort} onChange={(e) => setSort(e.target.value)}>
           {TASK_SORTS.map((s) => (
             <option key={s} value={s}>

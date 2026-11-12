@@ -12,6 +12,7 @@ import { notificationsRouter } from "./routes/notifications";
 import { projectsRouter } from "./routes/projects";
 import { remindersRouter } from "./routes/reminders";
 import { tasksRouter } from "./routes/tasks";
+import { teamRouter } from "./routes/team";
 import { workspacesRouter } from "./routes/workspaces";
 
 /**
@@ -51,6 +52,7 @@ export function createApp(ctx: AppContext): Express {
 
   app.use("/api/auth", authRouter(ctx));
   app.use("/api/workspaces", workspacesRouter(ctx));
+  app.use("/api/workspaces", teamRouter(ctx)); // /:id/team, /:id/activity (managers)
   app.use("/api/invitations", invitationsRouter(ctx));
   app.use("/api/tasks", tasksRouter(ctx));
   app.use("/api", remindersRouter(ctx)); // task reminders, push, calendar

@@ -12,7 +12,7 @@ import {
   type TaskDetail,
   type TaskReminder,
 } from "@lifesync/shared";
-import { Archive, ArchiveRestore, Bell, CalendarClock, Check, Copy, Pencil, Plus, Repeat, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, Bell, CalendarClock, Check, Copy, Pencil, Plus, Repeat, Trash2, UserPlus, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, createContext, useContext, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -24,7 +24,9 @@ import { Input } from "@/components/ui/form";
 import { api } from "@/lib/api";
 import { invalidate, useQuery } from "@/lib/use-query";
 import { cn, formatDay, formatTime } from "@/lib/utils";
+import { AssigneeAvatars } from "./assignees";
 import { useSession } from "./session";
+import { AssignEditor, ProgressUpdate, TaskComments, TaskHistory } from "./task-collab";
 import { TaskForm } from "./task-form";
 
 export interface Prefill {
@@ -219,6 +221,7 @@ function TaskDetailView({ id, onClose, onEdit }: { id: string; onClose: () => vo
   const { profile } = useSession();
   const { data: task, error, reload } = useQuery<TaskDetail>(`/api/tasks/${id}`);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
   if (error) return <ErrorState message={error.message} onRetry={reload} />;
   if (!task) return <Skeleton className="h-64" />;
@@ -247,6 +250,7 @@ function TaskDetailView({ id, onClose, onEdit }: { id: string; onClose: () => vo
   };
   const today = () => localDate(Date.now(), profile.timezone);
   const completed = task.status === "completed";
+  const can = task.permissions;
 
   return (
     <div className="space-y-5">
@@ -263,18 +267,24 @@ function TaskDetailView({ id, onClose, onEdit }: { id: string; onClose: () => vo
         <Button size="sm" variant={completed ? "outline" : work ? "work" : "personal"} onClick={() => patch({ status: completed ? "todo" : "completed" }, completed ? "Task reopened" : "Task completed")}>
           <Check /> {completed ? "Reopen" : "Complete"}
         </Button>
-        <Button size="sm" variant="outline" onClick={onEdit}>
-          <Pencil /> Edit
-        </Button>
+        {can.edit && (
+          <Button size="sm" variant="outline" onClick={onEdit}>
+            <Pencil /> Edit
+          </Button>
+        )}
         <Button size="sm" variant="outline" onClick={() => act("duplicate", "Task duplicated", onClose)}>
           <Copy /> Duplicate
         </Button>
-        <Button size="sm" variant="outline" onClick={() => act(task.archived ? "unarchive" : "archive", task.archived ? "Task restored" : "Task archived", onClose)}>
-          {task.archived ? <ArchiveRestore /> : <Archive />} {task.archived ? "Restore" : "Archive"}
-        </Button>
-        <Button size="sm" variant="ghost" className="text-danger hover:bg-danger-soft" onClick={() => setConfirmDelete(true)}>
-          <Trash2 /> Delete
-        </Button>
+        {can.edit && (
+          <Button size="sm" variant="outline" onClick={() => act(task.archived ? "unarchive" : "archive", task.archived ? "Task restored" : "Task archived", onClose)}>
+            {task.archived ? <ArchiveRestore /> : <Archive />} {task.archived ? "Restore" : "Archive"}
+          </Button>
+        )}
+        {can.delete && (
+          <Button size="sm" variant="ghost" className="text-danger hover:bg-danger-soft" onClick={() => setConfirmDelete(true)}>
+            <Trash2 /> Delete
+          </Button>
+        )}
       </div>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
@@ -291,12 +301,33 @@ function TaskDetailView({ id, onClose, onEdit }: { id: string; onClose: () => vo
           {task.estimatedMinutes ? `${task.estimatedMinutes} min est.` : "—"}
           {task.actualMinutes > 0 && ` · ${task.actualMinutes} min spent`}
         </Meta>
-        {task.assignees.length > 0 && <Meta label="Assigned to">{task.assignees.map((a) => a.fullName).join(", ")}</Meta>}
+        {work && (
+          <Meta label="Assigned to">
+            <span className="flex flex-wrap items-center gap-2">
+              {task.assignees.length > 0 ? (
+                <>
+                  <AssigneeAvatars assignees={task.assignees} max={4} decorative />
+                  <span>{task.assignees.map((a) => a.fullName).join(", ")}</span>
+                </>
+              ) : (
+                <span className="text-muted">Nobody yet</span>
+              )}
+              {can.assign && !assigning && (
+                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setAssigning(true)}>
+                  <UserPlus /> Assign
+                </Button>
+              )}
+            </span>
+          </Meta>
+        )}
         <Meta label="Created">
           {task.createdByName ?? "Someone"}, {formatDay(task.createdAt.slice(0, 10))}
         </Meta>
       </dl>
 
+      {assigning && <AssignEditor task={task} onClose={() => setAssigning(false)} />}
+
+      {can.edit && (
       <div className="flex flex-wrap items-center gap-2">
         <span className="flex items-center gap-1 text-xs text-muted">
           <CalendarClock className="size-3.5" aria-hidden /> Reschedule
@@ -318,6 +349,7 @@ function TaskDetailView({ id, onClose, onEdit }: { id: string; onClose: () => vo
           onChange={(e) => e.target.value && patch({ dueDate: e.target.value }, "Rescheduled")}
         />
       </div>
+      )}
 
       {task.recurrence && (
         <p className="flex items-center gap-1.5 text-sm text-muted">
@@ -339,12 +371,17 @@ function TaskDetailView({ id, onClose, onEdit }: { id: string; onClose: () => vo
 
       <Checklist task={task} />
 
-      {task.notes && (
+      {!can.edit && <ProgressUpdate key={task.status + task.actualMinutes + (task.notes ?? "")} task={task} />}
+
+      {can.edit && task.notes && (
         <section aria-label="Notes">
           <h3 className="mb-1 text-sm font-semibold">Notes</h3>
           <p className="whitespace-pre-wrap rounded-lg bg-surface-muted p-3 text-sm">{task.notes}</p>
         </section>
       )}
+
+      {work && <TaskComments taskId={task.id} />}
+      {work && <TaskHistory taskId={task.id} />}
 
       <ConfirmDialog
         open={confirmDelete}
