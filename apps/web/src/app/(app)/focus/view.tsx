@@ -2,7 +2,7 @@
 
 import type { FocusKind, FocusSession, FocusSummary, TaskListItem } from "@lifesync/shared";
 import { Coffee, Play, Settings2, Square, Target } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState, ErrorState, Skeleton } from "@/components/ui/card";
@@ -20,14 +20,36 @@ interface Settings {
 const DEFAULTS: Settings = { focus: 25, shortBreak: 5, longBreak: 15, longEvery: 4 };
 const STORAGE_KEY = "lifesync.focus.settings";
 
-function loadSettings(): Settings {
+const settingsListeners = new Set<() => void>();
+function readRaw(): string {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+    return localStorage.getItem(STORAGE_KEY) ?? "";
   } catch {
-    // Storage can be blocked; the defaults are fine.
+    return ""; // Storage can be blocked; the defaults are fine.
   }
-  return DEFAULTS;
+}
+function subscribeSettings(cb: () => void) {
+  settingsListeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    settingsListeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+function parseSettings(raw: string): Settings {
+  try {
+    return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS;
+  } catch {
+    return DEFAULTS;
+  }
+}
+function saveSettings(s: Settings) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  } catch {
+    // ignore
+  }
+  settingsListeners.forEach((l) => l());
 }
 
 const KIND_LABEL: Record<FocusKind, string> = { focus: "Focus", short_break: "Short break", long_break: "Long break" };
@@ -59,7 +81,8 @@ function SettingsForm({ value, onChange }: { value: Settings; onChange: (s: Sett
 
 export default function View() {
   const summary = useQuery<FocusSummary>("/api/focus");
-  const [settings, setSettings] = useState<Settings>(DEFAULTS);
+  const rawSettings = useSyncExternalStore(subscribeSettings, readRaw, () => "");
+  const settings = useMemo(() => parseSettings(rawSettings), [rawSettings]);
   const [showSettings, setShowSettings] = useState(false);
   const [kind, setKind] = useState<FocusKind>("focus");
   const [taskId, setTaskId] = useState("");
@@ -70,27 +93,13 @@ export default function View() {
 
   const tasks = useQuery<TaskListItem[]>("/api/tasks?status=open&assignee=me&limit=100");
 
-  useEffect(() => setSettings(loadSettings()), []);
-  const updateSettings = (s: Settings) => {
-    setSettings(s);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-    } catch {
-      // ignore
-    }
-  };
+  const updateSettings = saveSettings;
 
   const active = summary.data?.active ?? null;
   const plannedSeconds = (active?.plannedMinutes ?? 0) * 60;
   const elapsed = active ? Math.floor((now - new Date(active.startedAt).getTime()) / 1000) : 0;
   const remaining = active ? plannedSeconds - elapsed : 0;
 
-  // The server owns the start time, so a refresh or a second tab shows the same countdown.
-  useEffect(() => {
-    if (!active) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [active]);
 
   const finish = useCallback(
     async (session: FocusSession, completed: boolean, seconds: number) => {
@@ -110,7 +119,8 @@ export default function View() {
           setKind("focus");
         }
       } catch (e) {
-        toast.error(e instanceof ApiError ? e.message : "Could not save the session");
+        if (e instanceof ApiError && e.status === 404) invalidate("/api/focus"); // another tab already ended it
+        else toast.error(e instanceof ApiError ? e.message : "Could not save the session");
       } finally {
         finishing.current = false;
       }
@@ -118,10 +128,25 @@ export default function View() {
     [cycle, settings.longEvery],
   );
 
-  // Auto-finish when the countdown hits zero.
+  // The server owns the start time, so a refresh or a second tab shows the same countdown. The ticker
+  // also ends the session when time is up, trying once per session so a failure cannot loop.
+  const finishRef = useRef(finish);
   useEffect(() => {
-    if (active && remaining <= 0) void finish(active, true, plannedSeconds);
-  }, [active, remaining, plannedSeconds, finish]);
+    finishRef.current = finish;
+  });
+  const gaveUp = useRef<string | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => {
+      const t0 = Date.now();
+      setNow(t0);
+      if (t0 - new Date(active.startedAt).getTime() >= active.plannedMinutes * 60000 && gaveUp.current !== active.id) {
+        gaveUp.current = active.id;
+        void finishRef.current(active, true, active.plannedMinutes * 60);
+      }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [active]);
 
   const minutesFor = (k: FocusKind) => (k === "focus" ? settings.focus : k === "short_break" ? settings.shortBreak : settings.longBreak);
 

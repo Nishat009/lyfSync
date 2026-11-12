@@ -117,6 +117,21 @@ describe("focus sessions", () => {
   });
 });
 
+describe("focus time on organization tasks", () => {
+  it("lets an assignee log time, and hides tasks from members who cannot see them", async () => {
+    await ana.agent.post(`/api/workspaces/${orgId}/invitations`).send({ email: ben.email, role: "member" });
+    await ben.agent.post("/api/invitations/accept").send({ token: lastInviteToken() }).catch(() => undefined);
+    const mine = (await ana.agent.post("/api/tasks").send({ workspaceId: orgId, title: "Ana only" })).body;
+    const hidden = await ben.agent.post("/api/focus").send({ taskId: mine.id, plannedMinutes: 25 });
+    assert.equal(hidden.status, 404);
+    const assigned = (await ana.agent.post("/api/tasks").send({ workspaceId: orgId, title: "For Ben", assigneeIds: [ben.id] })).body;
+    const s = (await ben.agent.post("/api/focus").send({ taskId: assigned.id, plannedMinutes: 10 })).body;
+    await q(`update focus_sessions set started_at = now() - interval '10 minutes' where id = $1`, [s.id]);
+    await ben.agent.post(`/api/focus/${s.id}/finish`).send({ actualSeconds: 600, completed: true });
+    assert.equal((await q(`select actual_minutes from tasks where id = $1`, [assigned.id])).rows[0].actual_minutes, 10);
+  });
+});
+
 describe("notes", () => {
   it("creates, searches, edits and deletes notes", async () => {
     const n = await ana.agent.post(`/api/workspaces/${ana.personalId}/notes`).send({ title: "Ideas", body: "Learn Rust this year", kind: "personal" });
