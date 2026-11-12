@@ -211,8 +211,14 @@ export function lifeRouter(_ctx: AppContext): Router {
       const { date, count } = parse(habitLogSchema, req.body);
       const me = uid(req);
       const habit = await withUser(me, async (db) => {
-        const h = await db.query(`select workspace_id from habits where id = $1 and user_id = $2 and archived_at is null`, [id, me]);
+        const h = await db.query(`select workspace_id, by_weekday, target_per_day from habits where id = $1 and user_id = $2 and archived_at is null`, [id, me]);
         if (!h.rows[0]) throw notFound("Habit not found");
+        if (count > h.rows[0].target_per_day) {
+          throw badRequest(`Count can't exceed the daily target (${h.rows[0].target_per_day})`, "over_target");
+        }
+        if (count > 0 && !(h.rows[0].by_weekday as number[]).includes(weekdayOf(date))) {
+          throw badRequest("This habit isn't scheduled for that day", "off_day");
+        }
         const today = localDate(new Date(), await timezoneOf(db, me));
         if (date > today) throw badRequest("You can't log a habit for a future day", "future_date");
         if (date < addDays(today, -60)) throw badRequest("That day is too far back to change", "too_old");
