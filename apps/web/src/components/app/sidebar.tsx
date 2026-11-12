@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CalendarDays, CheckSquare, FolderKanban, LayoutDashboard, Mail, Settings, Sun, Users, UsersRound } from "lucide-react";
+import { BarChart3, Bell, CalendarDays, CheckSquare, FolderKanban, LayoutDashboard, Mail, NotebookPen, Repeat, Settings, Sun, Target, Users, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { Logo } from "./auth-shell";
@@ -71,6 +71,8 @@ export function Sidebar({ collapsed, onNavigate }: { collapsed?: boolean; onNavi
       <nav aria-label="Main" className="flex flex-1 flex-col gap-1">
         <NavLink href="/my-day" icon={Sun} label="My Day" exact {...nav} />
         <NavLink href="/calendar" icon={CalendarDays} label="Calendar" exact {...nav} />
+        <NavLink href="/focus" icon={Target} label="Focus" exact {...nav} />
+        <NavLink href="/analytics" icon={BarChart3} label="Balance" exact {...nav} />
         {current && (
           <>
             {!collapsed && (
@@ -80,6 +82,8 @@ export function Sidebar({ collapsed, onNavigate }: { collapsed?: boolean; onNavi
             <NavLink href={`/w/${current.id}/tasks`} icon={CheckSquare} label="Tasks" {...nav} />
             <NavLink href={`/w/${current.id}/calendar`} icon={CalendarDays} label="Workspace calendar" {...nav} />
             <NavLink href={`/w/${current.id}/projects`} icon={FolderKanban} label="Projects" {...nav} />
+            <NavLink href={`/w/${current.id}/habits`} icon={Repeat} label="Habits" {...nav} />
+            <NavLink href={`/w/${current.id}/notes`} icon={NotebookPen} label="Notes" {...nav} />
             {current.type === "organization" && canManage(current.role) && (
               <NavLink href={`/w/${current.id}/team`} icon={UsersRound} label="Team" {...nav} />
             )}

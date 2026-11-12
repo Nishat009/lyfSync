@@ -32,17 +32,27 @@ Frontend:
 
 Backend:
 - Next.js Server Actions / API Routes
-- Supabase PostgreSQL
-- Supabase Authentication
-- Supabase Realtime where necessary
-- Supabase Row Level Security (RLS)
+-Node.js
 
-Additional:
-- Supabase Storage for attachments
-- Browser Push Notifications using Web Push API
-- Service Worker
-- Scheduled backend jobs for reliable reminders
-- Recharts for analytics
+Express.js
+
+TypeScript
+
+Prisma ORM
+
+PostgreSQL
+
+Redis
+
+BullMQ
+
+Socket.IO
+
+Zod for request validation
+
+JWT authentication
+
+
 
 Use clean architecture and reusable components.
 

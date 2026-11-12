@@ -311,3 +311,85 @@ export interface TeamOverview {
   unassignedOpen: number;
   totals: { open: number; overdue: number; completedLast7Days: number };
 }
+
+// ---------- Phase 5 ----------
+
+export interface Habit {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  byWeekday: number[];
+  targetPerDay: number;
+  /** Count logged today. */
+  todayCount: number;
+  /** Is today a scheduled day for this habit. */
+  dueToday: boolean;
+  currentStreak: number;
+  longestStreak: number;
+  /** Last 14 days, oldest first. `due` is false on days the habit is not scheduled. */
+  history: { date: string; count: number; due: boolean; done: boolean }[];
+  totalDone: number;
+}
+
+export interface FocusSession {
+  id: string;
+  workspaceId: string | null;
+  taskId: string | null;
+  taskTitle: string | null;
+  kind: "focus" | "short_break" | "long_break";
+  plannedMinutes: number;
+  actualSeconds: number;
+  startedAt: string;
+  endedAt: string | null;
+  completed: boolean;
+}
+
+export interface FocusSummary {
+  today: string;
+  active: FocusSession | null;
+  todayFocusMinutes: number;
+  todaySessions: number;
+  weekFocusMinutes: number;
+  recent: FocusSession[];
+}
+
+export interface Note {
+  id: string;
+  workspaceId: string;
+  authorId: string;
+  authorName: string;
+  mine: boolean;
+  taskId: string | null;
+  taskTitle: string | null;
+  kind: "quick" | "task" | "meeting" | "personal";
+  visibility: "private" | "workspace";
+  title: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Analytics {
+  from: string;
+  to: string;
+  days: number;
+  scope: "all" | "workspace";
+  totals: {
+    completed: number;
+    pending: number;
+    overdue: number;
+    /** Overdue open tasks as a share of all open tasks, 0..100. */
+    overduePercent: number;
+    focusMinutes: number;
+    focusSessions: number;
+  };
+  /** One entry per day in the range, oldest first. */
+  daily: { date: string; completed: number; created: number; focusMinutes: number }[];
+  /** Completed tasks and focus minutes split by workspace kind. */
+  distribution: { work: { completed: number; focusMinutes: number }; personal: { completed: number; focusMinutes: number } };
+  /** Completed tasks by weekday (0 = Sunday) over the range. */
+  weekdays: { weekday: number; completed: number }[];
+  /** Habit completion across the range: scheduled days vs days fully done. */
+  habits: { scheduledDays: number; doneDays: number };
+}

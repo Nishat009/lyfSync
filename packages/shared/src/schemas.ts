@@ -323,3 +323,61 @@ export const calendarQuerySchema = z.object({
   to: dateSchema,
   workspaceId: uuidSchema.optional(),
 });
+
+// ---------- Phase 5: habits, focus, notes, analytics ----------
+
+export const HABIT_WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
+
+export const habitSchema = z.object({
+  name: text(120).min(1, { error: "Give the habit a name" }),
+  description: text(500).nullish(),
+  /** Days the habit applies to, 0 = Sunday. */
+  byWeekday: z.array(z.number().int().min(0).max(6)).min(1, { error: "Pick at least one day" }).max(7),
+  targetPerDay: z.number().int().min(1).max(100).default(1),
+});
+export type HabitInput = z.infer<typeof habitSchema>;
+
+export const habitLogSchema = z.object({
+  date: dateSchema,
+  /** 0 removes the entry for that day. */
+  count: z.number().int().min(0).max(100),
+});
+
+export const FOCUS_KINDS = ["focus", "short_break", "long_break"] as const;
+export type FocusKind = (typeof FOCUS_KINDS)[number];
+
+export const startFocusSchema = z.object({
+  workspaceId: uuidSchema.nullish(),
+  taskId: uuidSchema.nullish(),
+  kind: z.enum(FOCUS_KINDS).default("focus"),
+  plannedMinutes: z.number().int().min(1).max(240),
+});
+export type StartFocusInput = z.infer<typeof startFocusSchema>;
+
+export const finishFocusSchema = z.object({
+  actualSeconds: z.number().int().min(0).max(240 * 60),
+  completed: z.boolean(),
+});
+
+export const NOTE_KINDS = ["quick", "task", "meeting", "personal"] as const;
+export type NoteKind = (typeof NOTE_KINDS)[number];
+export const NOTE_KIND_LABELS: Record<NoteKind, string> = {
+  quick: "Quick note",
+  task: "Task note",
+  meeting: "Meeting note",
+  personal: "Personal note",
+};
+
+export const noteSchema = z.object({
+  title: text(200).nullish(),
+  body: z.string().max(50000),
+  kind: z.enum(NOTE_KINDS).default("quick"),
+  visibility: z.enum(["private", "workspace"]).default("private"),
+  taskId: uuidSchema.nullish(),
+}).refine((n) => n.body.trim().length > 0 || !!n.title?.trim(), { error: "Write something first", path: ["body"] });
+export type NoteInput = z.infer<typeof noteSchema>;
+
+export const analyticsQuerySchema = z.object({
+  workspaceId: uuidSchema.optional(),
+  days: z.coerce.number().int().refine((d) => [7, 30, 90].includes(d), { error: "days must be 7, 30 or 90" }).default(7),
+});

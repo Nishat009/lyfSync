@@ -7,6 +7,7 @@ import { errorMiddleware, handler, HttpError } from "./http";
 import { authRouter } from "./routes/auth";
 import { dashboardRouter } from "./routes/dashboard";
 import { invitationsRouter } from "./routes/invitations";
+import { lifeRouter } from "./routes/life";
 import { meRouter } from "./routes/me";
 import { notificationsRouter } from "./routes/notifications";
 import { projectsRouter } from "./routes/projects";
@@ -57,6 +58,7 @@ export function createApp(ctx: AppContext): Express {
   app.use("/api/tasks", tasksRouter(ctx));
   app.use("/api", remindersRouter(ctx)); // task reminders, push, calendar
   app.use("/api", projectsRouter(ctx)); // /workspaces/:id/projects, /projects/:id, categories
+  app.use("/api", lifeRouter(ctx)); // habits, focus, notes, analytics
   app.use("/api/dashboard", dashboardRouter(ctx));
   app.use("/api/notifications", notificationsRouter(ctx));
   app.use("/api", meRouter(ctx)); // /me, /profile, /notification-preferences, /avatars

@@ -1,6 +1,6 @@
 # LifeSync architecture
 
-This describes what is built today (Phases 1 to 3) and what is planned. It is kept next to the code so it can be corrected when the code changes.
+This describes what is built today (Phases 1 to 5) and what is planned. It is kept next to the code so it can be corrected when the code changes.
 
 ## 1. System overview
 
@@ -96,7 +96,7 @@ The whole schema ships up front. So far the UI and API use identity, workspaces,
 | 2 | Full task CRUD (edit, duplicate, archive, reschedule), projects, categories, checklists, tags, list + Kanban views, filters and sorting | **Built** |
 | 3 | Calendar (day/week/month/agenda, drag to reschedule, conflicts), recurring tasks, reminder scheduler, in-app / email / web push delivery, snooze, retries, missed alerts | **Built** (push not verified on a real device, see section 6) |
 | 4 | Task assignment, comments, activity timeline, manager views, project progress, role-based task permissions | **Built** |
-| 5 | Focus mode, habits, analytics, notes, polish, accessibility and security review | Planned |
+| 5 | Focus mode, habits, notes, balance analytics | **Built** (UI not yet checked in a browser; polish, accessibility and security review still to do) |
 
 ## 6. Known gaps
 
